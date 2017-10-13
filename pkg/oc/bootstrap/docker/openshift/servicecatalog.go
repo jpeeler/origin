@@ -43,10 +43,19 @@ func (h *Helper) InstallServiceCatalog(f *clientcmd.Factory, configDir, publicMa
 		return err
 	}
 
-	scRule, err := authzapi.NewRule("create", "update", "delete", "get", "list", "watch").Groups("servicecatalog.k8s.io").Resources("serviceinstances", "servicebindings").Rule()
-	podpresetRule, err := authzapi.NewRule("create", "update", "delete", "get", "list", "watch").Groups("settings.k8s.io").Resources("podpresets").Rule()
+	scRule := authzapi.NewRule("create", "update", "delete", "get", "list", "watch").Groups("servicecatalog.k8s.io").Resources("serviceinstances", "servicebindings").RuleOrDie()
+	podpresetRule := authzapi.NewRule("create", "update", "delete", "get", "list", "watch").Groups("settings.k8s.io").Resources("podpresets").RuleOrDie()
+	viewRule := authzapi.NewRule("get", "list", "watch").Groups("servicecatalog.k8s.io").Resources("serviceinstances", "servicebindings").RuleOrDie()
+
+	viewRole, err := authClient.Authorization().ClusterRoles().Get("view", metav1.GetOptions{})
 	if err != nil {
-		return errors.NewError("could not create service catalog resource rule").WithCause(err)
+		return errors.NewError("could not get cluster view role for patching").WithCause(err).WithDetails(h.OriginLog())
+	}
+
+	viewRole.Rules = append(viewRole.Rules, viewRule)
+	_, err = authClient.Authorization().ClusterRoles().Update(viewRole)
+	if err != nil {
+		return errors.NewError("could not update the cluster view role to add service catalog resource permissions").WithCause(err).WithDetails(h.OriginLog())
 	}
 
 	editRole, err := authClient.Authorization().ClusterRoles().Get("edit", metav1.GetOptions{})
