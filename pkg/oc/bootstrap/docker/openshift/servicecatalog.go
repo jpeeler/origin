@@ -14,8 +14,8 @@ import (
 	aggregatorapi "k8s.io/kube-aggregator/pkg/apis/apiregistration"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/internalclientset/typed/apiregistration/internalversion"
 	kapi "k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/registry/rbac/reconciliation"
 
-	authzapi "github.com/openshift/origin/pkg/authorization/apis/authorization"
 	"github.com/openshift/origin/pkg/cmd/util/clientcmd"
 	"github.com/openshift/origin/pkg/cmd/util/variable"
 	"github.com/openshift/origin/pkg/oc/bootstrap/docker/errors"
@@ -43,43 +43,17 @@ func (h *Helper) InstallServiceCatalog(f *clientcmd.Factory, configDir, publicMa
 		return err
 	}
 
-	scRule := authzapi.NewRule("create", "update", "delete", "get", "list", "watch").Groups("servicecatalog.k8s.io").Resources("serviceinstances", "servicebindings").RuleOrDie()
-	podpresetRule := authzapi.NewRule("create", "update", "delete", "get", "list", "watch").Groups("settings.k8s.io").Resources("podpresets").RuleOrDie()
-	viewRule := authzapi.NewRule("get", "list", "watch").Groups("servicecatalog.k8s.io").Resources("serviceinstances", "servicebindings").RuleOrDie()
-
-	viewRole, err := authClient.Authorization().ClusterRoles().Get("view", metav1.GetOptions{})
-	if err != nil {
-		return errors.NewError("could not get cluster view role for patching").WithCause(err).WithDetails(h.OriginLog())
-	}
-
-	viewRole.Rules = append(viewRole.Rules, viewRule)
-	_, err = authClient.Authorization().ClusterRoles().Update(viewRole)
-	if err != nil {
-		return errors.NewError("could not update the cluster view role to add service catalog resource permissions").WithCause(err).WithDetails(h.OriginLog())
-	}
-
-	editRole, err := authClient.Authorization().ClusterRoles().Get("edit", metav1.GetOptions{})
-	if err != nil {
-		return errors.NewError("could not get cluster edit role for patching").WithCause(err).WithDetails(h.OriginLog())
-	}
-
-	// Grant all users with the edit role, the ability to manage podpresets and service catalog instances/bindings
-	editRole.Rules = append(editRole.Rules, scRule, podpresetRule)
-	_, err = authClient.Authorization().ClusterRoles().Update(editRole)
-	if err != nil {
-		return errors.NewError("could not update the cluster edit role to add service catalog resource permissions").WithCause(err).WithDetails(h.OriginLog())
-	}
-
-	adminRole, err := authClient.Authorization().ClusterRoles().Get("admin", metav1.GetOptions{})
-	if err != nil {
-		return errors.NewError("could not get cluster admin role for patching").WithCause(err).WithDetails(h.OriginLog())
-	}
-
-	// Grant all users with the admin role, the ability to manage podpresets and service catalog instances/bindings
-	adminRole.Rules = append(adminRole.Rules, scRule, podpresetRule)
-	_, err = authClient.Authorization().ClusterRoles().Update(adminRole)
-	if err != nil {
-		return errors.NewError("could not update the cluster admin role to add service catalog resource permissions").WithCause(err).WithDetails(h.OriginLog())
+	for _, role := range GetServiceCatalogRBACDelta() {
+		if _, err := (&reconciliation.ReconcileRoleOptions{
+			Confirm:                true,
+			RemoveExtraPermissions: false,
+			Role: reconciliation.ClusterRoleRuleOwner{ClusterRole: &role},
+			Client: reconciliation.ClusterRoleModifier{
+				Client: kubeClient.Rbac().ClusterRoles(),
+			},
+		}).Run(); err != nil {
+			return errors.NewError("could not reconcile service catalog cluster role %s", role.Name).WithCause(err)
+		}
 	}
 
 	// create the namespace if needed.  This is a reserved namespace, so you can't do it with the create project request
