@@ -22,3 +22,4 @@ contrib/build/*/tmp/*
 .var
 # this is for buildling service catalog with origin tooling
 _output
+/go/src/github.com/kubernetes-incubator/service-catalog/_output
