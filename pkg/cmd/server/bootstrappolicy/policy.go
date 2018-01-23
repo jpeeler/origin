@@ -782,6 +782,46 @@ func GetOpenshiftBootstrapClusterRoles() []rbac.ClusterRole {
 	return clusterRoles
 }
 
+// GetServiceCatalogRBACRoles returns all the cluster roles required to bootstrap service catalog
+func GetServiceCatalogRBACRoles() []rbac.ClusterRole {
+	return []rbac.ClusterRole{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "system:openshift:aggregate-to-admin", Labels: map[string]string{"rbac.authorization.k8s.io/aggregate-to-admin": "true"},
+			},
+			Rules: []rbac.PolicyRule{
+				rbac.NewRule("create", "update", "delete", "get", "list", "watch", "patch").Groups("servicecatalog.k8s.io").Resources("serviceinstances", "servicebindings").RuleOrDie(),
+				rbac.NewRule("create", "update", "delete", "get", "list", "watch").Groups("settings.k8s.io").Resources("podpresets").RuleOrDie(),
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "system:openshift:aggregate-to-edit", Labels: map[string]string{"rbac.authorization.k8s.io/aggregate-to-edit": "true"},
+			},
+			Rules: []rbac.PolicyRule{
+				rbac.NewRule("create", "update", "delete", "get", "list", "watch", "patch").Groups("servicecatalog.k8s.io").Resources("serviceinstances", "servicebindings").RuleOrDie(),
+				rbac.NewRule("create", "update", "delete", "get", "list", "watch").Groups("settings.k8s.io").Resources("podpresets").RuleOrDie(),
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "system:openshift:aggregate-to-view", Labels: map[string]string{"rbac.authorization.k8s.io/aggregate-to-view": "true"},
+			},
+			Rules: []rbac.PolicyRule{
+				rbac.NewRule("get", "list", "watch").Groups("servicecatalog.k8s.io").Resources("serviceinstances", "servicebindings").RuleOrDie(),
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: ClusterServiceBrokerAdminRoleName,
+			},
+			Rules: []rbac.PolicyRule{
+				rbac.NewRule("create", "update", "delete", "get", "list", "watch", "patch").Groups("servicecatalog.k8s.io").Resources("clusterservicebrokers").RuleOrDie(),
+			},
+		},
+	}
+}
+
 func GetBootstrapClusterRoles() []rbac.ClusterRole {
 	openshiftClusterRoles := GetOpenshiftBootstrapClusterRoles()
 	// dead cluster roles need to be checked for conflicts (in case something new comes up)
@@ -790,6 +830,7 @@ func GetBootstrapClusterRoles() []rbac.ClusterRole {
 	kubeClusterRoles := bootstrappolicy.ClusterRoles()
 	kubeSAClusterRoles := bootstrappolicy.ControllerRoles()
 	openshiftControllerRoles := ControllerRoles()
+	catalogClusterRoles := GetServiceCatalogRBACRoles()
 
 	// Eventually openshift controllers and kube controllers have different prefixes
 	// so we will only need to check conflicts on the "normal" cluster roles
@@ -819,6 +860,7 @@ func GetBootstrapClusterRoles() []rbac.ClusterRole {
 	finalClusterRoles = append(finalClusterRoles, openshiftClusterRoles...)
 	finalClusterRoles = append(finalClusterRoles, openshiftControllerRoles...)
 	finalClusterRoles = append(finalClusterRoles, kubeSAClusterRoles...)
+	finalClusterRoles = append(finalClusterRoles, catalogClusterRoles...)
 	for i := range kubeClusterRoles {
 		if !clusterRoleConflicts.Has(kubeClusterRoles[i].Name) {
 			finalClusterRoles = append(finalClusterRoles, kubeClusterRoles[i])

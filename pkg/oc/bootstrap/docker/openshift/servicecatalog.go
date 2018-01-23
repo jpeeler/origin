@@ -14,7 +14,6 @@ import (
 	aggregatorapi "k8s.io/kube-aggregator/pkg/apis/apiregistration"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/internalclientset/typed/apiregistration/internalversion"
 	kapi "k8s.io/kubernetes/pkg/apis/core"
-	"k8s.io/kubernetes/pkg/registry/rbac/reconciliation"
 
 	"github.com/openshift/origin/pkg/cmd/util/variable"
 	"github.com/openshift/origin/pkg/oc/bootstrap/docker/errors"
@@ -37,19 +36,6 @@ func (h *Helper) InstallServiceCatalog(f *clientcmd.Factory, configDir, publicMa
 	templateClient, err := f.OpenshiftInternalTemplateClient()
 	if err != nil {
 		return err
-	}
-
-	for _, role := range GetServiceCatalogRBACDelta() {
-		if _, err := (&reconciliation.ReconcileRoleOptions{
-			Confirm:                true,
-			RemoveExtraPermissions: false,
-			Role: reconciliation.ClusterRoleRuleOwner{ClusterRole: &role},
-			Client: reconciliation.ClusterRoleModifier{
-				Client: kubeClient.Rbac().ClusterRoles(),
-			},
-		}).Run(); err != nil {
-			return errors.NewError("could not reconcile service catalog cluster role %s", role.Name).WithCause(err)
-		}
 	}
 
 	// create the namespace if needed.  This is a reserved namespace, so you can't do it with the create project request
