@@ -14978,6 +14978,7 @@ objects:
   kind: Role
   metadata:
     name: endpoint-accessor
+    namespace: kube-service-catalog
   rules:
   - apiGroups:
     - ""
@@ -14994,6 +14995,7 @@ objects:
   kind: RoleBinding
   metadata:
     name: endpointer-accessor-binding
+    namespace: kube-service-catalog
   roleRef:
     kind: Role
     name: endpoint-accessor
